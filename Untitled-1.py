@@ -31,6 +31,7 @@ player_mini_img = pygame.transform.scale(player_img, (25, 19))
 player_mini_img.set_colorkey(BLACK)
 pygame.display.set_icon(player_mini_img)
 bullet_img = pygame.image.load(os.path.join(BASE_DIR, "img", "bullet.png")).convert()
+bullet_img.set_colorkey(BLACK)
 rock_imgs = []
 for i in range(7):
     rock_imgs.append(pygame.image.load(os.path.join(BASE_DIR, "img", f"rock{i}.png")).convert())
@@ -216,27 +217,31 @@ class Player(pygame.sprite.Sprite):
                 bullets.add(bullet4)
                 shoot_sound.play()
             elif self.gun >= 5:
-                # 5級：五槍 - 發射追蹤飛彈（有冷卻時間）
+                # 5級：五槍 - 發射追蹤飛彈（有冷卻時間）或五槍子彈
                 now = pygame.time.get_ticks()
                 if not hasattr(self, 'missile_cooldown'):
                     self.missile_cooldown = 0
                     self.missile_shots = 0
+                    self.missile_active = False
                 
-                # 冷卻時間檢查：5秒或30次攻擊
-                if now - self.missile_cooldown > 5000 or self.missile_shots >= 30:
+                # 檢查冷卻時間是否完成
+                cooldown_elapsed = now - self.missile_cooldown
+                if cooldown_elapsed > 5000 or self.missile_shots >= 30:
+                    # 冷卻完成，重置狀態，準備發射飛彈
                     self.missile_cooldown = now
                     self.missile_shots = 0
+                    self.missile_active = True
                 
-                # 只在冷卻完成後發射飛彈
-                if self.missile_shots == 0 or (now - self.missile_cooldown < 5000 and self.missile_shots < 30):
-                    # 發射單發追蹤飛彈
+                # 發射飛彈模式（第一次發射）
+                if self.missile_active and self.missile_shots == 0:
                     missile = Missile(self.rect.centerx, self.rect.top - 10, rocks)
                     all_sprites.add(missile)
                     missiles.add(missile)
                     self.missile_shots += 1
+                    self.missile_active = False
                     shoot_sound.play()
                 else:
-                    # 冷卻中則改發普通子彈
+                    # 冷卻中發射五槍子彈
                     bullet1 = Bullet(self.rect.centerx, self.rect.top - 10, angle=0)
                     bullet2 = Bullet(self.rect.centerx - 12, self.rect.top - 5, angle=-45)
                     bullet3 = Bullet(self.rect.centerx + 12, self.rect.top - 5, angle=45)
@@ -252,6 +257,7 @@ class Player(pygame.sprite.Sprite):
                     bullets.add(bullet3)
                     bullets.add(bullet4)
                     bullets.add(bullet5)
+                    self.missile_shots += 1
                     shoot_sound.play()
 
     def hide(self):
@@ -299,7 +305,10 @@ class Rock(pygame.sprite.Sprite):
 class Bullet(pygame.sprite.Sprite):
     def __init__(self, x, y, angle=0):
         pygame.sprite.Sprite.__init__(self)
-        self.image = bullet_img
+        self.original_image = bullet_img
+        self.angle = angle
+        # 根據角度旋轉子彈圖像
+        self.image = pygame.transform.rotate(self.original_image, angle)
         self.image.set_colorkey(BLACK)
         self.rect = self.image.get_rect()
         self.rect.centerx = x
@@ -655,8 +664,8 @@ while running:
         draw_text(screen, f"時間: {remaining_time:.1f}s", 18, WIDTH/2, 40)
         
         # 顯示當前武器等級
-        weapon_names = {1: "單槍", 2: "雙槍", 3: "三槍", 4: "四槍", 5: "五槍"}
-        weapon_name = weapon_names.get(player.gun, "未知")
+        weapon_names = {1: "單槍", 2: "雙槍", 3: "三槍", 4: "四槍", 5: "飛彈系統"}
+        weapon_name = weapon_names.get(player.gun, weapon_names.get(5, "飛彈系統"))
         draw_text(screen, f"武器: {weapon_name}", 16, WIDTH - 120, 65)
         
     elif game_state == "select_item":
